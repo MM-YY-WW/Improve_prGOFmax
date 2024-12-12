@@ -6,7 +6,9 @@ The example result output file is
 example.txt
 ```
 
-if you want to reproduce our results, please run
+If you want to reproduce our results, download the model output logits from [model_outputs.zip](https://drive.google.com/file/d/19E_2yWWYKK_OD1fFsogiw8cIRmKUOIoO/view?usp=sharing)
+
+Then run
 ```
 unzip model_outputs.zip
 chmod u+x ./script/fmax_evaluation.sh
