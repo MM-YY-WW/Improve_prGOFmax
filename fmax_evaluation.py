@@ -13,14 +13,11 @@ import torch
 # Placeholder for Go Graph; initialize with your data
 graph = obonet.read_obo('PDB_test_set/go-basic.obo')
 
-# Convert the graph to a directed graph
 go_graph = nx.DiGraph()
 
-# Add nodes with attributes
 for node, data in graph.nodes(data=True):
     go_graph.add_node(node, **data)
 
-# Add edges
 for source, target in graph.edges():
     go_graph.add_edge(source, target)
 
@@ -70,91 +67,7 @@ def evaluate_threshold(threshold, goterms, Y_true, Y_pred, prot2goterms, go_grap
             return F_score, threshold, pred_list, true_list, overlap_list, Y_pred
     return 0, threshold, pred_list, true_list, overlap_list, Y_pred
 
-def calculate_combined_f1(gobert_threshold, gobert_dict , baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms):
-
-    goterms = np.asarray(list(next(iter(labels_dict.values())).keys()))
-    proteins = list(labels_dict.keys())
-    prediction_dict = {}
-    replaced_proteins = []
-    for key, logits in labels_dict.items():
-        count = 0
-        for goterm, value in logits.items():
-            if goterm in sub_goterms:
-                count += value
-        if count != 0:
-            replaced_proteins.append(key)
-    print(len(replaced_proteins))
-    replaced_proteins1 = []
-    for key, logits in baseline_dict.items():
-        count = 0
-        for goterm, value in logits.items():
-            if goterm in sub_goterms and value > baseline_threshold:
-                count+=1
-        if count != 0:
-            replaced_proteins1.append(key)
-    replaced_proteins = list(set(replaced_proteins) & set(replaced_proteins1))        
-    print(len(replaced_proteins), len(replaced_proteins1))
-
-    for key, logits in baseline_dict.items():
-        prediction_dict[key] = {}  # Initialize an empty dictionary for each key
-        for goterm, value in logits.items():
-            if key in replaced_proteins and goterm in gobert_dict[key]:
-                if gobert_dict[key][goterm] > gobert_threshold:
-                    prediction_dict[key][goterm] = 1
-                else:
-                    prediction_dict[key][goterm] = 0
-            else:
-                if value > baseline_threshold:
-                    prediction_dict[key][goterm] = 1
-                else:
-                    prediction_dict[key][goterm] = 0
-
-    Y_pred = np.array([[prediction_dict[p].get(go, 0) for go in goterms] for p in proteins])
-    Y_true = np.array([[labels_dict[p].get(go, 0) for go in goterms] for p in proteins])
-    n = Y_true.shape[0]
-    predictions = Y_pred
-    ont2root = {'bp': 'GO:0008150', 'mf': 'GO:0003674', 'cc': 'GO:0005575'}
-    precision, recall, m = 0.0, 0.0, 0
-    prot2goterms = {}
-    for i in range(n):
-        all_gos = set()
-        for goterm in goterms[np.where(Y_true[i] == 1)[0]]:
-            all_gos = all_gos.union(nx.descendants(go_graph, goterm))
-            all_gos.add(goterm)
-        all_gos.discard(ont2root[ont])
-        prot2goterms[i] = all_gos
-
-    pred_list = []
-    true_list = []
-    overlap_list  = []
-    for i in range(n):
-        pred_gos = set()
-        for goterm in goterms[np.where(predictions[i] == 1)[0]]:
-            pred_gos = pred_gos.union(nx.descendants(go_graph, goterm))
-            pred_gos.add(goterm)
-        pred_gos.discard(ont2root[ont])
-
-        num_pred = len(pred_gos)
-        num_true = len(prot2goterms[i])
-        num_overlap = len(prot2goterms[i].intersection(pred_gos))
-        pred_list.append(num_pred)
-        true_list.append(num_true)
-        overlap_list.append(num_overlap)
-        if num_pred > 0 and num_true > 0:
-            m += 1
-            precision += float(num_overlap) / num_pred
-            recall += float(num_overlap) / num_true
-
-
-    if m > 0:
-        AvgPr = precision / m
-        AvgRc = recall / n
-        if AvgPr + AvgRc > 0:
-            F_score = 2 * (AvgPr * AvgRc) / (AvgPr + AvgRc)
-            return F_score, pred_list, true_list, overlap_list
-    return 0, pred_list, true_list, overlap_list
-
-def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms, goterms, proteins, ont2root):
+def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms, goterms, proteins, ont2root, prot2goterms, propogate_dict):
     prediction_dict = {}
     replaced_proteins = []
     for key, logits in labels_dict.items():
@@ -183,7 +96,6 @@ def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, base
         for goterm, value in logits.items():
             if key in replaced_proteins and goterm in gobert_dict[key]:
                 prediction_value = (gobert_dict[key][goterm]*gobert_ratio + value*(1-gobert_ratio))
-                # if gobert_dict[key][goterm] > gobert_threshold:
                 if prediction_value > gobert_threshold:
                     prediction_dict[key][goterm] = 1
                 else:
@@ -198,15 +110,6 @@ def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, base
     Y_true = np.array([[labels_dict[p].get(go, 0) for go in goterms] for p in proteins])
     n = Y_true.shape[0]
 
-    prot2goterms = {}
-    for i in range(n):
-        all_gos = set()
-        for goterm in goterms[np.where(Y_true[i] == 1)[0]]:
-            all_gos = all_gos.union(nx.descendants(go_graph, goterm))
-            all_gos.add(goterm)
-        all_gos.discard(ont2root[ont])
-        prot2goterms[i] = all_gos
-
     precision, recall, m = 0.0, 0.0, 0
     pred_list = []
     true_list = []
@@ -214,7 +117,7 @@ def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, base
     for i in range(n):
         pred_gos = set()
         for goterm in goterms[np.where(Y_pred[i] == 1)[0]]:
-            pred_gos = pred_gos.union(nx.descendants(go_graph, goterm))
+            pred_gos = pred_gos.union(propogate_dict[goterm])
             pred_gos.add(goterm)
         pred_gos.discard(ont2root[ont])
 
@@ -234,17 +137,28 @@ def evaluate_combine_threshold(gobert_threshold, gobert_ratio, gobert_dict, base
         AvgRc = recall / n
         if AvgPr + AvgRc > 0:
             F_score = 2 * (AvgPr * AvgRc) / (AvgPr + AvgRc)
-            return F_score, pred_list, true_list, overlap_list
-    return 0, pred_list, true_list, overlap_list
+            return F_score
+    return 0
 
-def calculate_combined_f1_multiprocessing(gobert_thresholds, gobert_ratios, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms):
+def calculate_combined_f1_multiprocessing(gobert_thresholds, gobert_ratios, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms, propogate_dict):
     goterms = np.asarray(list(next(iter(labels_dict.values())).keys()))
     proteins = list(labels_dict.keys())
     ont2root = {'bp': 'GO:0008150', 'mf': 'GO:0003674', 'cc': 'GO:0005575'}
+    
+    Y_true = np.array([[labels_dict[p].get(go, 0) for go in goterms] for p in proteins])
+    n = Y_true.shape[0]
+    prot2goterms = {}
+    for i in range(n):
+        all_gos = set()
+        for goterm in goterms[np.where(Y_true[i] == 1)[0]]:
+            all_gos = all_gos.union(propogate_dict[goterm])
+            all_gos.add(goterm)
+        all_gos.discard(ont2root[ont])
+        prot2goterms[i] = all_gos
 
     # Prepare combinations of thresholds and ratios
     tasks = [
-        (threshold, ratio, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms, goterms, proteins, ont2root)
+        (threshold, ratio, gobert_dict, baseline_threshold, baseline_dict, labels_dict, ont, sub_goterms, goterms, proteins, ont2root, prot2goterms, propogate_dict)
         for threshold in gobert_thresholds
         for ratio in gobert_ratios
     ]
@@ -255,69 +169,9 @@ def calculate_combined_f1_multiprocessing(gobert_thresholds, gobert_ratios, gobe
     # Find the best combination
     max_F_score = max(results)
     best_task_index = results.index(max_F_score)
-    best_threshold, best_ratio = tasks[best_task_index][:2]
-
+    best_threshold = tasks[best_task_index][0]
+    best_ratio = tasks[best_task_index][1]
     return max_F_score, best_threshold, best_ratio
-
-def calculate_f1_with_threshold(gobert_threshold, gobert_dict , baseline_threshold, baseline_dict, labels_dict, ont):
-    goterms = list(next(iter(labels_dict.values())).keys())
-    proteins = list(labels_dict.keys())
-    # for key, logits in baseline_dict.items():
-    #     for goterm, value in logits.items():
-    #         if value > baseline_threshold:
-    #             baseline_dict[key][goterm] = 1
-    #         else:
-    #             baseline_dict[key][goterm] = 0
-
-    Y_pred = np.array([[baseline_dict[p].get(go, 0) for go in goterms] for p in proteins])
-    Y_true = np.array([[labels_dict[p].get(go, 0) for go in goterms] for p in proteins])
-    propagate_go_preds(Y_pred, goterms)
-
-    n = Y_true.shape[0]
-    # predictions = Y_pred
-    goterms = np.asarray(goterms)
-    ont2root = {'bp': 'GO:0008150', 'mf': 'GO:0003674', 'cc': 'GO:0005575'}
-    prot2goterms = {}
-    for i in range(n):
-        all_gos = set()
-        for goterm in goterms[np.where(Y_true[i] == 1)[0]]:
-            all_gos = all_gos.union(nx.descendants(go_graph, goterm))
-            all_gos.add(goterm)
-        all_gos.discard(ont2root[ont])
-        prot2goterms[i] = all_gos
-
-    predictions = (Y_pred > baseline_threshold).astype(int)
-    precision, recall, m = 0.0, 0.0, 0
-    # print("\n",sum(Y_pred), baseline_threshold,"only baseline\n")
-    pred_list = []
-    true_list = []
-    overlap_list  = []
-    for i in range(n):
-        pred_gos = set()
-        for goterm in goterms[np.where(predictions[i] == 1)[0]]:
-            pred_gos = pred_gos.union(nx.descendants(go_graph, goterm))
-            pred_gos.add(goterm)
-        pred_gos.discard(ont2root[ont])
-
-        num_pred = len(pred_gos)
-        num_true = len(prot2goterms[i])
-        num_overlap = len(prot2goterms[i].intersection(pred_gos))
-        pred_list.append(num_pred)
-        true_list.append(num_true)
-        overlap_list.append(num_overlap)
-        if num_pred > 0 and num_true > 0:
-            m += 1
-            precision += float(num_overlap) / num_pred
-            recall += float(num_overlap) / num_true
-
-
-    if m > 0:
-        AvgPr = precision / m
-        AvgRc = recall / n
-        if AvgPr + AvgRc > 0:
-            F_score = 2 * (AvgPr * AvgRc) / (AvgPr + AvgRc)
-            return F_score, pred_list, true_list, overlap_list
-    return 0, pred_list, true_list, overlap_list
 
 class Method:
     def __init__(self, model, subgraph, logits_dict, labels_dict, goterms=None, threshold=None):
@@ -370,11 +224,6 @@ class Method:
             )
 
         max_F1, best_threshold, pred_list, true_list, overlap_list, predictions = max(results, key=lambda x: x[0])
-        # print(f"pred_list{pred_list}")
-        # print(f"true_list{true_list}")
-        # print(f"overlap_list{overlap_list}")
-        # print("\n",sum(predictions), thresholds)
-
         return max_F1, best_threshold
 
 if __name__ == "__main__":
@@ -407,6 +256,7 @@ if __name__ == "__main__":
             gobert_ratios = [args.best_gobert_ratio]
         else:
             gobert_ratios = [t/10 for t in range(1,10)]
+        propogate_dict = pickle.load(open(f"PDB_test_set/{args.ontology}_propogate_dict.pkl", "rb"))
         max_F_score, best_threshold, best_ratio = calculate_combined_f1_multiprocessing(
             gobert_thresholds, 
             gobert_ratios,
@@ -415,16 +265,20 @@ if __name__ == "__main__":
             baseline_dict=ori_logits_dict,
             labels_dict=labels_dict,
             ont=args.ontology.lower(),
-            sub_goterms=subset_goterm  # Example sub_goterms
+            sub_goterms=subset_goterm,  # Example sub_goterms,
+            propogate_dict = propogate_dict
         )
 
-        print(f"F-max for {args.model} with GoBERT on {args.ontology}: {max_F_score:.4f}, with GoBERT threshold {best_threshold} ratio {best_ratio}")
+        # print(f"F-max for {args.model} with GoBERT on {args.ontology}: {max_F_score:.4f}, with GoBERT threshold {best_threshold} ratio {best_ratio}")
+        print(f"F-max for {args.model} with GoBERT on {args.ontology}: {max_F_score:.4f}")
         gobert_method = Method(model = 'GoBERT',subgraph=args.ontology.lower(),logits_dict = gobert_dict, labels_dict=labels_dict, goterms=subset_goterm, threshold=best_threshold)
         gobert_fmax,gobert_threshold = gobert_method.fmax()
-        print(f"{gobert_fmax:.4f}", gobert_threshold)
+        # print(f"Fmax of gobert at combining threshold: {gobert_fmax:.4f}", gobert_threshold)
+        print(f"Fmax of gobert at combining: {gobert_fmax:.4f}")
 
     else:
         # Calculate F-max
         fmax,thres = method.fmax()
-        print(f"F-max for {args.model} on {args.ontology}: {fmax:.4f} with threshold {thres}")
+        # print(f"F-max for {args.model} on {args.ontology}: {fmax:.4f} with threshold {thres}")
+        print(f"F-max for {args.model} on {args.ontology}: {fmax:.4f}")
 
