@@ -1,0 +1,53 @@
+### Evaluating the original baseline performance ###
+F-max for DeepFri on BP: 0.5427 
+F-max for DeepFri on CC: 0.6094
+F-max for DeepFri on MF: 0.6433
+
+F-max for PFresGO on BP: 0.5682
+F-max for PFresGO on CC: 0.6518
+F-max for PFresGO on MF: 0.7002
+
+F-max for HEAL on BP: 0.5637
+F-max for HEAL on CC: 0.6532
+F-max for HEAL on MF: 0.6856
+
+
+
+### Evaluating on harder test set ###
+F-max for DeepFri on BP: 0.0293
+F-max for DeepFri on CC: 0.0200
+F-max for DeepFri on MF: 0.0339
+
+F-max for PFresGO on BP: 0.0259
+F-max for PFresGO on CC: 0.0241
+F-max for PFresGO on MF: 0.0177
+
+F-max for HEAL on BP: 0.0274
+F-max for HEAL on CC: 0.0179
+F-max for HEAL on MF: 0.0335
+
+
+
+### Results after combining with GoBERT ###
+F-max for DeepFri with GoBERT on BP: 0.5430
+Fmax of gobert at combining: 0.1523 
+F-max for DeepFri with GoBERT on CC: 0.6094
+Fmax of gobert at combining: 0.1689 
+F-max for DeepFri with GoBERT on MF: 0.6437
+Fmax of gobert at combining: 0.0993 
+
+F-max for PFresGO with GoBERT on BP: 0.5684
+Fmax of gobert at combining: 0.0970 
+F-max for PFresGO with GoBERT on CC: 0.6607
+Fmax of gobert at combining: 0.1719
+F-max for PFresGO with GoBERT on MF: 0.7007
+Fmax of gobert at combining: 0.1021
+
+F-max for HEAL with GoBERT on BP: 0.5638
+Fmax of gobert at combining: 0.1523
+F-max for HEAL with GoBERT on CC: 0.6600
+Fmax of gobert at combining: 0.1719
+F-max for HEAL with GoBERT on MF: 0.6860
+Fmax of gobert at combining: 0.1021
+
+### All evaluations completed ###
